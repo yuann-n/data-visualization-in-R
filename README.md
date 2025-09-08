@@ -5,18 +5,17 @@
 
 ## Overview
 
-This repository contains an interactive E‑Commerce dashboard built with **flexdashboard** and **Shiny**. The dashboard visualizes customer distribution, demographics (age and gender), profit and sales analytics, delivery center performance, purchase decision time, and basic regression diagnostics. Preprocessed data files are included as `.rds` resources for faster loading.
+This eCommerce dashboard provides an interactive and insightful view into customer demographics, profitability, delivery performance, and purchase behavior. I used flexdashboard to build the entire dashboard structure, incorporating shiny to enable interactivity and adjust the layout within each page. Highcharter was used to create an interactive map, and plotly was employed to generate interactive data visualizations.
 
 ---
 
 ## Features
 
-* **Worldwide Map:** Interactive choropleth map (Highcharter) showing customers by country. Clicking a country updates demographic charts.
-* **Age & Gender Distribution:** Plotly pie charts displaying age group and gender distribution for the selected country and year.
-* **Profit Analysis:** Top profit charts by category/brand, support for per-country drill-down via Plotly click events.
-* **Delivery Center Performance:** Delivery time distribution across distribution centers and order status breakdown.
-* **Purchase Decision Time:** Scatter/line plots of average time to purchase versus number of items, with grouping options.
-* **Regression Diagnostics:** Q-Q plot and Cook's distance plots for a sample regression model (for demonstration).
+* **Worldwide Map:** Displays a global map showing customer distribution across different countries. Alongside the map, pie charts present the age and gender proportions of customers in each country. Users can click on any country on the map to view detailed demographic information specific to that region.
+* **Profit Analysis:** Highlights the categories and brands generating the highest profits. Provides detailed breakdowns of profits by category and brand within each country. Users can click on the country bar chart on the left to update the right panel, reflecting the selected country's specific profit data.
+* **Delivery Center Performance:** Shows the distribution of delivery times across different distribution centers. Visualizes the percentage of different delivery statuses (e.g., on-time, delayed) for each center. Enables users to understand the efficiency of each center and identify potential areas for operational improvement.
+* **Purchase Decision Time:** Illustrates the relationship between purchase quantity and average decision-making time. Provides insights into customer behavior, showing how decision time increases as purchase quantity rises. Supports strategic planning by highlighting potential changes in customer decision-making with larger purchases.
+* **Regression Diagnostics:** Offers a deeper analysis of data through a linear model that explores relationships within the dataset. Includes diagnostic plots such as the Q-Q plot and Cook's Distance plot to assess model fit and detect influential data points. Supports users in understanding the model's robustness and the data's suitability for linear analysis.
 
 ---
 
