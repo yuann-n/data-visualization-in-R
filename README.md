@@ -130,4 +130,3 @@ For issues or collaboration, open an issue in this repository or contact the aut
 
 ---
 
-*Generated README for the E-Commerce flexdashboard project.*
