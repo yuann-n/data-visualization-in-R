@@ -1,0 +1,960 @@
+---
+title: "E-Commerce"
+author: "Zhiyuan Jiang"
+output:
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    theme: yeti
+    code: embed
+runtime: shiny
+resource_files:
+- distribution_centers.rds
+- inventory_items_old.rds
+- order_items.rds
+- orders.rds
+- products_old.rds
+- users_old.rds
+- start_to_end_purchase_events.rds
+- project.Rproj
+---
+
+```{r}
+# required_packages <- c("rmarkdown", "tidyverse", "shiny", "flexdashboard", "highcharter", 
+#                        "plotly", "crosstalk", "ggiraph", "here", "magrittr", "countrycode", "shinydashboard",
+#                        "dplyr", "hms", "corrplot")
+# 
+# installed_packages <- rownames(installed.packages()) 
+# 
+# to_install <- setdiff(required_packages, installed_packages)
+# 
+# install.packages("required_packages", repos = "https://cran.rstudio.com/")
+```
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(here)
+library(magrittr)
+library(flexdashboard)
+library(highcharter)
+library(plotly)
+library(countrycode)
+library(dplyr)
+library(hms)
+library(corrplot)
+library(shinydashboard)
+library(broom)
+library(ggplot2)
+library(ggrepel)
+
+# distribution_centers <- read_csv("distribution_centers.csv")
+# saveRDS(distribution_centers, file = "distribution_centers.rds")
+distribution_centers <- read_rds("distribution_centers.rds")
+
+# inventory_items_old <- read_csv("inventory_items_old.csv")
+# saveRDS(inventory_items_old, file = "inventory_items_old.rds")
+inventory_items_old <- read_rds("inventory_items_old.rds")
+
+# order_items <- read_csv("order_items.csv")
+# saveRDS(order_items, file = "order_items.rds")
+order_items <- read_rds("order_items.rds")
+
+# orders <- read_csv("orders.csv")
+# saveRDS(orders, file = "orders.rds")
+orders <- read_rds("orders.rds")
+
+# products_old <- read_csv("products_old.csv")
+# saveRDS(products_old, file = "products_old.rds")
+products_old <- read_rds("products_old.rds")
+
+# start_to_end_purchase_events <- read_csv("start_to_end_purchase_events.csv")
+# saveRDS(start_to_end_purchase_events, file = "start_to_end_purchase_events.rds")
+start_to_end_purchase_events <- read_rds("start_to_end_purchase_events.rds")
+
+# users_old <- read_csv("users_old.csv")
+# saveRDS(users_old, file = "users_old.rds")
+users_old <- read_rds("users_old.rds")
+
+```
+
+```{r}
+library(magrittr)
+library(flexdashboard)
+library(highcharter)
+library(plotly)
+library(countrycode)
+library(dplyr)
+library(hms)
+library(corrplot)
+library(shinydashboard)
+library(showtext)
+
+font_add_google("Lato", "lato")
+font_add_google("Open Sans", "OpS")
+font_add_google("Assistant", "Asssistant")
+showtext_auto()
+
+userid <- orders |> count(user_id) |> rename(order_num = n) |> rename(id = user_id)
+users <- merge(users_old, userid, by = "id", all = TRUE) |> mutate(country = recode(country, "Brasil" = "Brazil", "España" = "Spain"))
+users$created_at <- as.POSIXct(users$created_at, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+users$year <- format(users$created_at, "%Y") 
+users$year <- as.integer(users$year)
+# -----------------------------year&country_map-----------------------------------
+users_country <- users |> filter(!is.na(order_num)) |> group_by(year,country) |> summarise(order_count = n()) 
+temp_users <- users |> filter(is.na(order_num)) |> group_by(year,country) |> summarise(not_order_count = n()) 
+users_country <- full_join(users_country, temp_users, by = c("year", "country"))
+users_country$order_count <- ifelse(is.na(users_country$order_count), 0, users_country$order_count)
+users_country$not_order_count <- ifelse(is.na(users_country$not_order_count), 0, users_country$not_order_count)
+
+
+sum_2019_to_2024 <- users_country |> 
+  filter(year %in% 2019:2024) |> 
+  group_by(country) |> 
+  summarise(order_count = sum(order_count), not_order_count = sum(not_order_count)) |> 
+  mutate(year = 2024)
+
+sum_2019_to_2023 <- users_country |> 
+  filter(year %in% 2019:2023) |> 
+  group_by(country) |> 
+  summarise(order_count = sum(order_count), not_order_count = sum(not_order_count)) |> 
+  mutate(year = 2023)
+
+sum_2019_to_2022 <- users_country |> 
+  filter(year %in% 2019:2022) |> 
+  group_by(country) |> 
+  summarise(order_count = sum(order_count), not_order_count = sum(not_order_count)) |> 
+  mutate(year = 2022)
+
+sum_2019_to_2021 <- users_country |> 
+  filter(year %in% 2019:2021) |> 
+  group_by(country) |> 
+  summarise(order_count = sum(order_count), not_order_count = sum(not_order_count)) |> 
+  mutate(year = 2021)
+
+sum_2019_to_2020 <- users_country |> 
+  filter(year %in% 2019:2020) |> 
+  group_by(country) |> 
+  summarise(order_count = sum(order_count), not_order_count = sum(not_order_count)) |> 
+  mutate(year = 2020)
+
+sum_2019 <- users_country |> 
+  filter(year %in% 2019) |> 
+  mutate(year = 2019)
+
+users_num_Y_C <- bind_rows(sum_2019_to_2024, sum_2019_to_2023, sum_2019_to_2022, sum_2019_to_2021, sum_2019_to_2020, sum_2019) |> mutate(total_count = order_count + not_order_count) |> mutate(count = total_count)
+users_num_Y_C$year <- as.character(users_num_Y_C$year)
+
+data(worldgeojson, package = "highcharter")
+users_num_Y_C$iso3 <- countrycode(users_num_Y_C$country, 'country.name', 'iso3c')
+```
+
+```{r}
+# -----------------------------------------------------age_pie-------------------------------
+users <- users |> mutate(age_group = case_when(
+    age <= 14 ~ "0-14",
+    age >= 15 & age <= 24 ~ "15-24",
+    age >= 25 & age <= 34 ~ "25-34",
+    age >= 35 & age <= 44 ~ "35-44",
+    age >= 45 & age <= 54 ~ "45-54",
+    age >= 55 & age <= 64 ~ "55-64",
+    age >= 65 ~ "65+"
+  ))
+
+users_age <- users |> group_by(year,country,age_group) |> summarise(age_count = n())
+
+sum_2019_to_2024 <- users_age |> 
+  filter(year %in% 2019:2024) |> 
+  group_by(country,age_group) |>  
+  summarise(age_count = sum(age_count)) |> 
+  mutate(year = 2024)
+temp1 <- sum_2019_to_2024 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2024)
+sum_2019_to_2024 <- bind_rows(sum_2019_to_2024, temp1)
+  
+
+sum_2019_to_2023 <- users_age |> 
+  filter(year %in% 2019:2023) |> 
+  group_by(country,age_group) |> 
+  summarise(age_count = sum(age_count)) |> 
+  mutate(year = 2023)
+temp1 <- sum_2019_to_2023 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2023)
+sum_2019_to_2023 <- bind_rows(sum_2019_to_2023, temp1)
+
+sum_2019_to_2022 <- users_age |> 
+  filter(year %in% 2019:2022) |> 
+  group_by(country,age_group) |> 
+  summarise(age_count = sum(age_count)) |> 
+  mutate(year = 2022)
+temp1 <- sum_2019_to_2022 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2022)
+sum_2019_to_2022 <- bind_rows(sum_2019_to_2022, temp1)
+
+sum_2019_to_2021 <- users_age |> 
+  filter(year %in% 2019:2021) |> 
+  group_by(country,age_group) |> 
+  summarise(age_count = sum(age_count)) |> 
+  mutate(year = 2021)
+temp1 <- sum_2019_to_2021 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2021)
+sum_2019_to_2021 <- bind_rows(sum_2019_to_2021, temp1)
+
+sum_2019_to_2020 <- users_age |> 
+  filter(year %in% 2019:2020) |> 
+  group_by(country,age_group) |> 
+  summarise(age_count = sum(age_count)) |> 
+  mutate(year = 2020)
+temp1 <- sum_2019_to_2020 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2020)
+sum_2019_to_2020 <- bind_rows(sum_2019_to_2020, temp1)
+
+sum_2019 <- users_age |> 
+  filter(year %in% 2019) |> 
+  mutate(year = 2019)
+temp1 <- sum_2019 |> 
+  group_by(age_group) |> 
+  summarise(country = "All Countries", age_count = sum(age_count), year = 2019)
+sum_2019 <- bind_rows(sum_2019, temp1)
+
+users_num_age <- bind_rows(sum_2019_to_2024, sum_2019_to_2023, sum_2019_to_2022, sum_2019_to_2021, sum_2019_to_2020, sum_2019)
+
+users_num_age$year <- as.character(users_num_age$year)
+```
+
+```{r}
+# ----------------------------------gender_pie--------------------------------------
+
+users_gender <- users |> group_by(year,country,gender) |> summarise(gender_count = n())
+
+sum_2019_to_2024 <- users_gender |> 
+  filter(year %in% 2019:2024) |> 
+  group_by(country,gender) |>  
+  summarise(gender_count = sum(gender_count)) |> 
+  mutate(year = 2024)
+temp1 <- sum_2019_to_2024 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2024)
+sum_2019_to_2024 <- bind_rows(sum_2019_to_2024, temp1)
+  
+
+sum_2019_to_2023 <- users_gender |> 
+  filter(year %in% 2019:2023) |> 
+  group_by(country,gender) |> 
+  summarise(gender_count = sum(gender_count)) |> 
+  mutate(year = 2023)
+temp1 <- sum_2019_to_2023 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2023)
+sum_2019_to_2023 <- bind_rows(sum_2019_to_2023, temp1)
+
+sum_2019_to_2022 <- users_gender |> 
+  filter(year %in% 2019:2022) |> 
+  group_by(country,gender) |> 
+  summarise(gender_count = sum(gender_count)) |> 
+  mutate(year = 2022)
+temp1 <- sum_2019_to_2022 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2022)
+sum_2019_to_2022 <- bind_rows(sum_2019_to_2022, temp1)
+
+sum_2019_to_2021 <- users_gender |> 
+  filter(year %in% 2019:2021) |> 
+  group_by(country,gender) |> 
+  summarise(gender_count = sum(gender_count)) |> 
+  mutate(year = 2021)
+temp1 <- sum_2019_to_2021 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2021)
+sum_2019_to_2021 <- bind_rows(sum_2019_to_2021, temp1)
+
+sum_2019_to_2020 <- users_gender |> 
+  filter(year %in% 2019:2020) |> 
+  group_by(country,gender) |> 
+  summarise(gender_count = sum(gender_count)) |> 
+  mutate(year = 2020)
+temp1 <- sum_2019_to_2020 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2020)
+sum_2019_to_2020 <- bind_rows(sum_2019_to_2020, temp1)
+
+sum_2019 <- users_gender |> 
+  filter(year %in% 2019) |> 
+  mutate(year = 2019)
+temp1 <- sum_2019 |> 
+  group_by(gender) |> 
+  summarise(country = "All Countries", gender_count = sum(gender_count), year = 2019)
+sum_2019 <- bind_rows(sum_2019, temp1)
+
+users_num_gender <- bind_rows(sum_2019_to_2024, sum_2019_to_2023, sum_2019_to_2022, sum_2019_to_2021, sum_2019_to_2020, sum_2019)
+
+users_num_gender$year <- as.character(users_num_gender$year)
+
+```
+
+```{r}
+# -------------------------------------order----------------------------------------------
+order_i_p <- left_join(order_items, products_old, by = join_by(product_id == id))
+order_products <- left_join(order_i_p, users, by = join_by(user_id == id))
+order_products$created_at.x <- as.POSIXct(order_products$created_at.x, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+order_products$shipped_at <- as.POSIXct(order_products$shipped_at, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+order_products$delivered_at <- as.POSIXct(order_products$delivered_at, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+order_products$returned_at <- as.POSIXct(order_products$returned_at, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+order_products$created_year <- format(order_products$created_at, "%Y") |> as.integer(order_products$created_year)
+order_products$shipped_year <- format(order_products$shipped_at, "%Y") |> as.integer(order_products$shipped_year)
+order_products$delivered_year <- format(order_products$delivered_at, "%Y") |> as.integer(order_products$delivered_year)
+order_products$returned_year <- format(order_products$returned_at, "%Y") |> as.integer(order_products$returned_year)
+
+# temp <- order_products |> group_by(status) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost))
+# order_products |> filter(status != "Cancelled" & status != "Returned")
+
+# --------------------------------------------------profits--------------------------------------------------
+products_sum_category <- order_products |> filter(status == "Complete") |> group_by(category, delivered_year, country) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost), profits = retail_sum - cost_sum)
+temp1 <- order_products |> filter(status == "Complete") |> group_by(category, delivered_year) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost), profits = retail_sum - cost_sum) |> mutate(country = "All Countries")
+products_sum_category <- full_join(products_sum_category, temp1)
+
+products_sum_brand <- order_products |> filter(status == "Complete") |> group_by(brand, delivered_year, country) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost), profits = retail_sum - cost_sum)
+temp1 <- order_products |> filter(status == "Complete") |> group_by(brand, delivered_year) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost), profits = retail_sum - cost_sum) |> mutate(country = "All Countries")
+products_sum_brand <- full_join(products_sum_brand, temp1)
+
+
+# products_sum_gender <- order_products |> filter(status == "Complete") |> group_by(department, delivered_year) |> summarise(retail_sum = sum(retail_price), cost_sum = sum(cost))
+# ---------------------------------------------------sales--------------------------------------------
+products_count_category <- order_products |> filter(status == "Complete") |> group_by(category, delivered_year, country) |> summarise(retail_count = n())
+temp1 <- order_products |> filter(status == "Complete") |> group_by(category, delivered_year) |> 
+  summarise(retail_count = n()) |> mutate(country = "All Countries")
+products_count_category <- full_join(products_count_category, temp1)
+
+products_count_brand <- order_products |> filter(status == "Complete") |> group_by(brand, delivered_year, country) |> summarise(retail_count = n())
+temp1 <- order_products |> filter(status == "Complete") |> group_by(brand, delivered_year) |> 
+  summarise(retail_count = n()) |> mutate(country = "All Countries")
+products_count_brand <- full_join(products_count_brand, temp1)
+
+products_count_gender <- order_products |> filter(status == "Complete") |> group_by(department, delivered_year) |> summarise(retail_count = n())
+
+```
+
+```{r}
+# ------------------------------------------------purchase_time-------------------------
+library(hms)
+
+# purchase_time <- full_join(users,start_to_end_purchase_events, join_by("id" == "user"))
+start_to_end_purchase_events$start_time <- as.POSIXct(start_to_end_purchase_events$start_time, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+start_to_end_purchase_events$purchase_time <- as.POSIXct(start_to_end_purchase_events$purchase_time, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+start_to_end_purchase_events <- start_to_end_purchase_events |> mutate(time_taken = purchase_time - start_time) 
+
+start_to_end_purchase_events$time_taken <- as.character(start_to_end_purchase_events$time_taken) |>
+  as.integer(start_to_end_purchase_events$time_taken)
+
+start_to_end_purchase_events$year <- format(start_to_end_purchase_events$purchase_time, "%Y") 
+start_to_end_purchase_events$year <- as.integer(start_to_end_purchase_events$year)
+
+purchase_time <- start_to_end_purchase_events |> group_by(user) |> summarise(total_time = sum(time_taken), purchase_count = n()) |> mutate(total_time = as_hms(total_time)) 
+purchase_time <- left_join(purchase_time, users, join_by("user" == "id"))
+avg_purchase <- purchase_time |> group_by(purchase_count) |> summarise(avg_time = mean(total_time), user_num = n()) |> 
+  mutate(avg_time = as_hms(avg_time))
+
+
+```
+
+```{r}
+# ---------------------------------------delivery map---------------------------------------------------
+distribution_all <- order_products |> group_by(distribution_center_id, country) |> summarise(country_count = n(), country_latitude = mean(latitude), country_longitude = mean(longitude))
+distribution_all <- left_join(distribution_all, distribution_centers, join_by("distribution_center_id" == "id"))
+
+distribution_complete <- order_products |> filter(status == "Complete") |> group_by(distribution_center_id, country) |> summarise(country_count = n(), country_latitude = mean(latitude), country_longitude = mean(longitude))
+distribution_complete <- left_join(distribution_complete, distribution_centers, join_by("distribution_center_id" == "id"))
+
+distribution_shipped <- order_products |> filter(status == "Shipped") |> group_by(distribution_center_id, country) |> summarise(country_count = n(), country_latitude = mean(latitude), country_longitude = mean(longitude))
+distribution_shipped <- left_join(distribution_shipped, distribution_centers, join_by("distribution_center_id" == "id"))
+
+distribution_cancelled <- order_products |> filter(status == "Cancelled") |> group_by(distribution_center_id, country) |> summarise(country_count = n(), country_latitude = mean(latitude), country_longitude = mean(longitude))
+distribution_cancelled <- left_join(distribution_cancelled, distribution_centers, join_by("distribution_center_id" == "id"))
+
+distribution_processing <- order_products |> filter(status == "Processing") |> group_by(distribution_center_id, country) |> summarise(country_count = n(), country_latitude = mean(latitude), country_longitude = mean(longitude))
+distribution_processing <- left_join(distribution_processing, distribution_centers, join_by("distribution_center_id" == "id"))
+
+# --------------------------------------------completed days----------------------------------------------------
+order_products <- order_products |> mutate(delivery_day = delivered_at - created_at.x, short_delivery = delivered_at - shipped_at)
+order_products$delivery_day <- order_products$delivery_day |> as.numeric() / (24 * 60 * 60)
+order_products$short_delivery <- order_products$short_delivery |> as.numeric() / (24 * 60 * 60)
+order_products <- order_products |>  mutate(delivery_day = if_else(delivery_day < short_delivery, short_delivery, delivery_day))
+
+order_products <- order_products |> mutate(day_group = case_when(
+    delivery_day  <= 1 ~ "Within 1 day",
+    delivery_day  > 1 & delivery_day  <= 2 ~ "Within 2 days",
+    delivery_day  > 2 & delivery_day  <= 3 ~ "Within 3 days",
+    delivery_day  > 3 & delivery_day  <= 4 ~ "Within 4 days",
+    delivery_day  > 4 & delivery_day  <= 5 ~ "Within 5 days",
+    delivery_day  > 5 & delivery_day  <= 6 ~ "Within 6 days",
+    delivery_day  > 6 ~ "At least 7 days"
+  ))
+
+completed_day <- order_products |> filter(status == "Complete") |> group_by(day_group, distribution_center_id) |> 
+  summarise(group_count = n()) 
+
+temp <- order_products |> filter(status == "Complete") |> group_by(day_group) |> 
+  summarise(group_count = n()) |> mutate(name = "All Centers")
+
+completed_day <- left_join(completed_day, distribution_centers, join_by("distribution_center_id" == "id"))
+completed_day <- full_join(completed_day, temp)
+
+status_counts <- order_products |> group_by(status, distribution_center_id) |> summarise(status_count = n())
+temp <- order_products |> group_by(status) |> summarise(status_count = n()) |> mutate(name = "All Centers")
+
+status_counts <- left_join(status_counts, distribution_centers, join_by("distribution_center_id" == "id"))
+status_counts <- full_join(status_counts, temp)
+
+```
+
+```{r}
+# library(corrplot)
+# 
+# corr_order <- order_products |> select(user_id, sale_price, cost, order_num, age, delivery_day) |> group_by(user_id) |> summarise(del_day = mean(delivery_day), sales = sum(sale_price), cost = sum(cost), age = mean(age), order_num = mean(order_num))
+# num_items <- orders |> group_by(user_id) |> summarise(num_item = sum(num_of_item))
+# corr_order <- left_join(corr_order, num_items) |> select(-user_id)
+# # temp <- order_products |> select(user_id, order_num)
+# corr_matrix <- cor(corr_order)
+# 
+
+```
+
+------------------------------------------------------------------------
+
+```{r}
+countries <- c("All Countries", "Australia", "Austria", "Belgium", "Brazil", "China", 
+  "Colombia", "France", "Germany", "Japan", "Poland", "South Korea", 
+  "Spain", "United Kingdom", "United States")
+countries <- sort(unique(countries))
+countries1 <- countries
+countries2 <- countries
+countries3 <- countries
+
+distribution_name <- c("All Centers", "Memphis", "Chicago", "Houston", "Los Angeles", "New Orleans", 
+                 "Port Authority of New York/New Jersey", "Philadelphia", "Mobile", 
+                 "Charleston", "Savannah")
+
+distribution_name <- sort(distribution_name)
+center1 <- distribution_name
+center2 <- distribution_name
+
+choice <- c("age_group", "gender", "traffic_source", "year", "None")
+
+selected_products <- c("brand", "category")
+```
+
+# Worldwide
+
+## Column {data-width="625"}
+
+### Customer Distribution
+
+```{r}
+
+# splitLayout(
+highchartOutput("map")
+# textOutput("yearText")
+# )
+absolutePanel(top = 20, right = 40, draggable = TRUE,
+  sliderInput("year", "Year:", 
+      min = 2019, max = 2024,
+      value = 2024,
+      timeFormat = "%Y", animate = FALSE)
+)
+
+output$map <- renderHighchart({
+  selected_year <- input$year
+  filtered_data <- users_num_Y_C |> filter(year == selected_year)
+  
+  highchart() |> 
+    hc_add_series_map(worldgeojson, filtered_data, value = "total_count", joinBy = "iso3") |> 
+    hc_colorAxis(stops = color_stops()) |> 
+    hc_mapNavigation(enabled = TRUE) |> 
+    hc_title(text = "Customers by Country",
+             style = list(fontFamily = "Lato", fontWeight = "bold", fontSize = "20px")) |> 
+    hc_subtitle(text = "2019-2024") |> 
+    hc_tooltip(borderWidth = 1.5, useHTML = TRUE, headerFormat = "",
+               pointFormat = ("<div style='text-align: center;'>
+                               <b> {point.country} </b> <br> 
+                               <b> {point.count} </b> Registered people <br> 
+                               <b> {point.order_count} </b> Active users <br>
+                               <b> {point.not_order_count} </b> Inactive users 
+                               </div>")) |>  
+    hc_legend(verticalAlign = 'top', enabled = TRUE) |> 
+    hc_plotOptions(series = list(
+      point = list(
+        events = list(
+          click = JS("function(event) {
+            var countryName = event.point.country;
+            Shiny.setInputValue('selected_country', countryName);
+          }")
+        ))
+        )
+      ) |> 
+    hc_add_theme(hc_theme_google()) 
+
+})
+selected_country <- reactive({input$selected_country})
+
+
+```
+
+## Column {data-width=375}
+
+### Age Group Distribution
+
+```{r}
+
+splitLayout(
+  plotlyOutput("pie1", height = "50%"),
+  )
+
+output$pie1 <- renderPlotly({
+  if(length(selected_country()) == 0) validate("Select one country on map to show their age distrubtion.")
+  req(selected_country())
+  selected_country1 <- selected_country()
+  age_data <- users_num_age |> filter((country == selected_country1) & (year == input$year))
+  plot_ly(age_data, labels = ~age_group, values = ~age_count, type = 'pie', 
+          textinfo = 'label+percent', 
+          text = ~paste(sprintf("Age group:%s", age_group), "<br>Number of people:", age_count),
+          hoverinfo = "text") |> 
+    layout(title = paste("Customers by Age Groups in", selected_country1), autosize = TRUE)
+})
+```
+
+### Gender Group Distribution
+
+```{r}
+
+splitLayout(
+  plotlyOutput("pie2", height = "50%")
+  )
+output$pie2 <- renderPlotly({
+  if(length(selected_country()) == 0) validate("Select one country on map to show their gender distrubtion.")
+  req(selected_country())
+  selected_country2 <- selected_country()
+  gender_data <- users_num_gender |> mutate(gender = ifelse(gender == "F", "Female", "Male")) |> filter((country == selected_country2) & (year == input$year)) 
+  plot_ly(gender_data, labels = ~gender, values = ~gender_count, type = 'pie',
+          textinfo = 'label+percent', 
+          text = ~paste(sprintf("%s", gender), "<br>Number of people:", gender_count),
+          hoverinfo = "text") |>
+    layout(title = paste("Customers by Gender in", selected_country2), autosize = TRUE
+           # legend = c("Female", "Male")
+             )
+})
+```
+
+# Profit Analysis
+
+
+Column {.no-padding data-width="1000"}
+------------------------------------------------------------------------------
+### Top 10 Profits 
+```{r, fig.width=10, fig.height=7}
+
+# uiOutput("button")
+
+radioButtons("region", "Regions", choices = c("All Countries", "Countries"))
+
+splitLayout(
+  selectInput("selected_products1", "Category", choices = selected_products, selected = "category"),
+  uiOutput("second_select")
+)
+br()
+splitLayout(
+  plotlyOutput("profits", height = "80%"),
+  plotlyOutput("sales", height = "80%")
+  )
+br()
+splitLayout(
+  sliderInput("year1", "Year:", min = 2019, max = 2024, value = 2024, timeFormat = "%Y", animate = FALSE),
+
+  uiOutput("second_slider")
+)
+
+# output$button <- renderUI({radioButtons("region", "Regions", choices = c("All Countries", "Countries")) 
+# })
+
+output$second_select <- renderUI({
+  req(input$region == "Countries")
+  selectInput("selected_products2", "Category", choices = selected_products, selected = "category")
+})
+
+output$second_slider <- renderUI({
+  req(input$region == "Countries")
+  sliderInput("year2", "Year:", min = 2019, max = 2024, value = 2024, timeFormat = "%Y", animate = FALSE)
+})
+output$profits <- renderPlotly({
+  selected_region1 <- input$region
+  selected_products1 <- input$selected_products1
+  selected_year <- input$year1
+  
+  if (selected_products1 == "category") {
+    profits_data <- products_sum_category |> rename(y = category)
+  } else {
+    profits_data <- products_sum_brand |> rename(y = brand)
+  }
+  
+  if(selected_region1 == "All Countries"){
+    profits_data <- profits_data |> filter(country == "All Countries")
+    profits_data <- profits_data |> filter(delivered_year == selected_year) |> arrange(desc(profits)) |> head(10)
+  
+    plot_ly(profits_data, y = ~y, x = ~profits, color = ~country, type = "bar", orientation = "h",
+            text = NULL,textinfo = "none",
+            hoverinfo = "text",
+            hovertext = ~paste(sprintf("%s:", selected_products1), y, "<br>Profits:", sprintf(" $%.2f", profits), "<br>Country:", country)) |> 
+    layout(
+      title = paste("Top 10 Profits in", selected_products1),
+      yaxis = list(title = "Category", autorange = "reversed", categoryorder = "array", categoryarray = profits_data$y),
+      xaxis = list(title = "Profits"), autosize = TRUE
+    ) |> event_register("plotly_click")
+  } else {
+    profits_data <- profits_data |> filter(country != "All Countries")
+    profits_data <- profits_data |> filter(delivered_year == selected_year) |> group_by(country) |> slice_max(order_by = profits, n = 1) 
+    profits_data <- profits_data[order(-profits_data$profits), ]
+  
+    plot_ly(profits_data, y = ~country, x = ~profits, color = ~y, 
+            type = "bar", orientation = "h", source = "plot_source", 
+            text = NULL,textinfo = "none",
+            hoverinfo = "text",
+            hovertext = ~paste(sprintf("%s:", selected_products1), y, "<br>Profits:", sprintf(" $%.2f", profits), "<br>Country:", country)) |> 
+    layout(
+      title = paste("Top 10 Profits in", selected_products1),
+      yaxis = list(title = "Category", autorange = "reversed", categoryorder = "array", categoryarray = profits_data$country),
+      xaxis = list(title = "Profits"), autosize = TRUE
+      # clickmode = "select+event",
+    ) |> 
+      event_register("plotly_click")
+  }
+})
+
+observeEvent(event_data("plotly_click", source = "plot_source"), {
+  click_data <- event_data("plotly_click", source = "plot_source")
+})
+
+
+selected_profits_country <- reactive({
+  click_data <- event_data("plotly_click", source = "plot_source")
+  if (!is.null(click_data)) {
+    click_data$y
+  } else {
+    NULL
+  }
+})
+
+
+# output$click_info <- renderPrint({
+#   click_data <- event_data("plotly_click", source = "plot_source")
+#   if (!is.null(click_data)) {
+#     click_data$y
+#   } else {
+#     "No data clicked"
+#   }
+# })
+
+```
+
+
+
+```{r, fig.width=10, fig.height=7}
+output$sales <- renderPlotly({
+  selected_region2 <- input$region
+  selected_products2 <- input$selected_products2
+  selected_year2 <- input$year2
+  
+  req(selected_profits_country())
+  click_country <- selected_profits_country()
+  print(click_country) 
+  
+  if (is.null(selected_profits_country())) {
+  validate("Select one country to show.")
+  }
+  
+  if (selected_products2 == "category") {
+    country_data <- products_sum_category |> rename(y = category)
+  } else {
+    country_data <- products_sum_brand |> rename(y = brand)
+  }
+  
+  if(selected_region2 == "Countries"){
+    req(selected_profits_country())
+    click_country <- selected_profits_country()
+    print(click_country) 
+    country_data <- country_data |> filter(country == click_country, delivered_year == selected_year2) |> arrange(desc(profits)) |> head(10)
+    country_data <- country_data[order(-country_data$profits), ]
+    plot_ly(country_data, y = ~factor(y, levels = rev(unique(y))), x = ~profits, type = "bar", orientation = "h",
+          text = NULL,textinfo = "none",
+          hoverinfo = "text",
+          hovertext = ~paste(sprintf("%s:", selected_products2), y, "<br>Profits:", sprintf(" $%.2f", profits), "<br>Country:", click_country)) |>
+    layout(
+      title = paste("Top 10 Profits in", click_country),
+      yaxis = list(title = "Category"),
+      xaxis = list(title = "Profits"), autosize = TRUE
+    )} 
+})
+
+# observeEvent(event_data("plotly_click"), {
+#   country_clicked <- event_data("plotly_click")$y 
+#   click_country(country_clicked)
+# })
+
+```
+
+
+# Delivery Center Performance
+
+Row {.no-padding data-width="660"}
+--------------------------------------------------------------------------------
+### Delivery days in every Distribution Centers 
+```{r}
+# highchartOutput("dist")
+
+plotlyOutput("distribution", height = "50%")
+
+complete <- completed_day |> filter(name != "All Centers") |> rename(proportion = group_count, "delivery time" = day_group)
+mas_plot <- ggplot(complete, aes(x = name, y = proportion, fill = `delivery time`)) + 
+  geom_bar(stat = "identity", position = "fill") + 
+  labs(title = "Delivery Days between Distribution Centers", x = "Distribution Centers", y = "Proportion", fill = "Delivery Time") + 
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, family = "Asssistant", face = "bold", size = 16),
+        axis.title.x = element_text(vjust = -1, family = "Asssistant", size = 14),
+        axis.title.y = element_text(family = "Asssistant", size = 14),
+        axis.text = element_text(family = "Asssistant", size = 7),
+  )
+
+mas_plotly <- ggplotly(mas_plot)
+
+output$distribution <- renderPlotly({mas_plotly})
+```
+
+Row {.tabset .tabset-fade data-width="340"}
+--------------------------------------------------------------------------------
+### Completed Days
+```{r}
+# splitLayout(
+  selectInput("center1", "Distribution Centers", choices = center1,
+    selected = "All Centers", multiple = FALSE)
+
+# )
+
+# splitLayout(
+  plotlyOutput("pie3", height = "50%")
+  # plotlyOutput("pie4", height = "50%")
+  # )
+
+output$pie3 <- renderPlotly({
+  selected_center1 <- input$center1
+  center_data <- completed_day |> filter(name == selected_center1)
+  plot_ly(center_data, labels = ~day_group, values = ~group_count, type = 'pie',
+          text = ~paste(sprintf("Time:%s:", day_group), "<br>Number of items:", group_count),
+          hoverinfo = "text", 
+          textinfo = 'label+percent') |>
+    layout(title = paste("Distribution Days in", selected_center1), autosize = TRUE)
+})
+
+
+```
+
+### Items Status
+```{r}
+selectInput("center2", "Distribution Centers", choices = center2,
+  selected = "All Centers", multiple = FALSE)
+plotlyOutput("pie4", height = "50%")
+
+output$pie4 <- renderPlotly({
+  selected_center2 <- input$center2
+  center_data2 <- status_counts |> filter(name == selected_center2)
+  plot_ly(center_data2, labels = ~status, values = ~status_count, type = 'pie',
+          text = ~paste(sprintf("Status:", status), "<br>Number of items:", status_count),
+          hoverinfo = "text", 
+          textinfo = 'label+percent') |>
+    layout(title = paste("Every Status proportion in", selected_center2), autosize = TRUE)
+})
+```
+
+
+# Purchase Decision Time
+
+## Column {data-width="1000"}
+
+### Average Purchase Time
+
+```{r}
+avg_purchase <- purchase_time |> group_by(purchase_count) |> summarise(avg_time = mean(total_time), user_num = n()) |> 
+  mutate(avg_time = as_hms(avg_time))
+
+splitLayout(
+  selectInput("choice", "Group by", choices = choice, selected = "None", multiple = FALSE),
+  tags$style("#choice { width: 400px; height: 500px; overflow-y: scroll; }")
+)
+
+br()
+splitLayout(
+  plotlyOutput("line1", height = "50%"),
+)
+
+output$line1 <- renderPlotly({
+  selected_choice <- input$choice
+
+if (selected_choice != "None"){
+    purchase_data <- purchase_time |> group_by(purchase_count, !!sym(selected_choice)) |> summarise(avg_time = mean(total_time)/3600, user_num = n()) 
+    # purchase_data <- purchase_data |> mutate(year = as.character(year))
+    plot_ly(purchase_data) |> 
+      add_trace(type = "scatter", mode = "markers+lines",
+                x = ~purchase_count, y = ~avg_time, 
+                color = ~as.factor(purchase_data[[selected_choice]]),
+                # group = ~(purchase_data[[selected_choice]]),
+                hoverinfo = "text",
+                hovertext = ~paste(sprintf("%s", purchase_count), " items<br>Average decision time:", sprintf("%.2f", avg_time), " hours")
+                ) |> 
+      layout(
+        yaxis = list(title = "Average purchase time(hours)", 
+                     type = "linear",
+                     autorange = TRUE
+                     ),
+        xaxis = list(title = "Items number"),
+        font = list(family = "Assistant", size = 13),
+        showlegend = TRUE
+  )
+} else {
+  purchase_data <- purchase_time |> group_by(purchase_count) |> summarise(avg_time = mean(total_time)/3600, user_num = n()) 
+  plot_ly(purchase_data) |> 
+    add_trace(type = "scatter", mode = "markers+lines",
+              x = ~purchase_count, y = ~avg_time, 
+              # color = ~(!!sym(selected_choice)),
+              hoverinfo = "text",
+              hovertext = ~paste(sprintf("%s", purchase_count), " items<br>Average decision time:", sprintf("%.2f", avg_time), " hours")
+              ) |> 
+    layout(
+      yaxis = list(title = "Average purchase time(hours)", type = "linear"),
+      xaxis = list(title = "Items number"),
+      font = list(family = "Assistant", size = 13),
+      showlegend = TRUE
+  )
+}
+
+
+})
+```
+
+
+<!-- ## Column {.no-padding data-width="500"} -->
+
+<!-- ### PCA -->
+```{r}
+
+```
+
+
+# Data Analysis and Modeling
+
+## Column {.no-padding data-width="500"}
+
+### Q-Q Plot
+```{r}
+
+model_data <- order_products |> filter((country == "Australia" ), status == "Complete") |> select(status, sale_price, cost, category, brand, department, distribution_center_id, age, gender, country, traffic_source, delivery_day, order_num)
+
+model_data <- na.omit(model_data)
+lmmodel <- lm(order_num ~ age + sale_price + cost + factor(category) + factor(brand) + delivery_day, data = model_data)
+# summary(lmmodel)
+
+# AIC(lmmodel)
+lmmodel_clean <- na.omit(lmmodel)
+# stepwise_model <- step(lmmodel, direction = "both")
+
+pmmodel <- glm(order_num ~ age + sale_price + cost + factor(category) + factor(brand) +  factor(traffic_source) + delivery_day, data = model_data, family = gaussian)
+# summary(pmmodel)
+
+orderaug <- augment(lmmodel)
+# orderaug <- augment(pmmodel)
+
+high_abs_resid <- rank(-abs(orderaug$.std.resid)) <= 2
+
+# p1 <- ggplot(orderaug, aes(.fitted, .resid,
+#                          label = ifelse(high_abs_resid, seq_along(high_abs_resid), NA))) +
+#   geom_point() +
+#   geom_smooth(se = FALSE, color = "red") + 
+#   geom_text_repel() + 
+#   labs(title = "Residuals vs Fitted",
+#        x = "Fitted Values",
+#        y = "Residuals") +
+#   theme_minimal()
+# p1
+
+p2 <- ggplot(orderaug, aes(sample = .resid,)) +
+  stat_qq() +
+  stat_qq_line(color = "red") + 
+  labs(title = "Normal Q-Q Plot",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles") +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, family = "Asssistant", face = "bold", size = 16),
+        axis.title.x = element_text(vjust = -1, family = "Asssistant", size = 14),
+        axis.title.y = element_text(family = "Asssistant", size = 14),
+        axis.text = element_text(family = "Asssistant", size = 12),
+  )
+# p2
+p2_plotly <- ggplotly(p2)
+# p2_plotly
+
+# p3 <- ggplot(orderaug, aes(x = .fitted, y = sqrt(abs(.std.resid)),
+#                          label = ifelse(high_abs_resid, seq_along(high_abs_resid), NA))) +
+#   geom_point() + 
+#   geom_smooth(se = FALSE) + 
+#   geom_text_repel() + 
+#   labs(title = "Scale-Location Plot", 
+#        x = "Fitted values", 
+#        y = expression(sqrt(abs("Std. Residual"))))
+# p3_plotly <- ggplotly(p3)
+# p3_plotly
+
+# high_cook <- rank(-abs(orderaug$.cooksd)) <= 3
+# p4 <- ggplot(orderaug, aes(x = .hat, y = .std.resid, size = .cooksd,
+#                          label = ifelse(high_cook, seq_along(high_cook), NA))) +
+#   geom_point() + 
+#   geom_text_repel() +
+#   labs(title = "Cook's Distance", 
+#        x = "Leverage", y = "Pearson residual")
+# p4
+plotlyOutput("qq")
+output$qq <- renderPlotly({p2_plotly})
+
+```
+
+## Column {.no-padding data-width="500"}
+
+### Cook's Distance Plot
+
+```{r}
+high_cook <- rank(-abs(orderaug$.cooksd)) <= 3
+p4 <- ggplot(orderaug, aes(x = .hat, y = .std.resid, size = .cooksd,
+                         label = ifelse(high_cook, seq_along(high_cook), NA))) +
+  geom_point() +
+  geom_text_repel() +
+  labs(title = "Cook's Distance",
+       x = "Leverage", y = "Pearson residual") + 
+  theme(
+    plot.title = element_text(hjust = 0.5, family = "Asssistant", face = "bold", size = 16),
+        axis.title.x = element_text(vjust = -1, family = "Asssistant", size = 14),
+        axis.title.y = element_text(family = "Asssistant", size = 14),
+        axis.text = element_text(family = "Asssistant", size = 12),
+  )
+p4_plotly <- ggplotly(p4)
+
+plotlyOutput("highcook")
+output$highcook <- renderPlotly({p4_plotly})
+```
+
+
+```{r}
+library(rsconnect)
+rsconnect::setAccountInfo(name='dylan-jiang', token='918D044497AE50FBA26331663AD7FFFD', secret='bqS1B4pDiNSzsqSAnVJXaTIMceODKUPoc/HvOlDX')
+# rsconnect::deployApp('path/to/your/app')
+```
