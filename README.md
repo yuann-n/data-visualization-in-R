@@ -94,31 +94,6 @@ rsconnect::deployApp(appDir = ".")
 * Country names must be standardized for `countrycode()` to map to ISO3 (`iso3c`). The Rmd includes small recodes for common misspellings (e.g., "Brasil" → "Brazil").
 * Timezone: timestamps are parsed with `tz = 'UTC'`.
 
----
-
-## Known Issues & Recommendations
-
-1. **`output` object errors when running code line-by-line**: The dashboard uses Shiny runtime. Do not run `output$... <- render...` in the global console. Use `rmarkdown::run()` or RStudio Run Document to ensure Shiny's `input` and `output` are available.
-
-2. **Potential bugs to fix in dashboard.Rmd**:
-
-   * Convert year extraction correctly, e.g. `order_products$created_year <- as.integer(format(order_products$created_at, "%Y"))`.
-   * In `dplyr::summarise()` avoid referencing newly-created columns in the same call. Compute `retail_sum` and `cost_sum` first, then `mutate(profits = retail_sum - cost_sum)`.
-
-3. **Fonts**: `font_add_google()` requires internet. If fonts fail to load in the target environment, switch to installed system fonts or include `.ttf` files and use `font_add()`.
-
-4. **Large memory usage**: If the `.rds` files are large, consider producing smaller aggregated `.rds` files that the dashboard reads at launch to reduce memory footprint and startup time.
-
-5. **Sensitive tokens**: Remove any hard-coded `rsconnect` tokens or secrets before committing the repository.
-
----
-
-## Suggested Improvements
-
-* Factor repeated "cumulative from 2019 to YEAR" logic into functions to reduce code duplication.
-* Move heavy preprocessing into a separate script that produces small summary `.rds` files consumed by the dashboard.
-* Improve reactive performance by using `req()` and `debounce()` where appropriate and using `event_data(..., source = "...")` carefully for Plotly interactivity.
-* Add unit tests or sanity checks for key data assumptions (e.g. country ISO mapping, non-null timestamps).
 
 ---
 
